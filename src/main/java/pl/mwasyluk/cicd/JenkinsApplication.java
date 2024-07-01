@@ -15,6 +15,6 @@ public class JenkinsApplication {
 
 	@GetMapping("/")
 	public String helloWorld(){
-		return "Hello, world!";
+		return "Hello, world! Auto poll verification #3";
 	}
 }
