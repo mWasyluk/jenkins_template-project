@@ -1,0 +1,65 @@
+pipeline {
+    agent {
+        node {
+            label 'docker-agent-jdk-docker-maven'
+        }
+    }
+    
+    triggers {
+        pollSCM 'H/5 * * * *'
+    }
+    
+    stages {
+        stage('Fetch App') {
+            steps {
+                echo "Fetching the App from git repo..."
+                git branch: 'main', url: 'https://github.com/mWasyluk/jenkins_template-project.git'
+                // provide bind .m2
+            }
+        }
+        
+        stage('Build App') {
+            steps {
+                echo "Building the App with Maven..."
+                sh 'mvn clean package --no-transfer-progress'
+            }
+        }
+        
+        stage('Sonar Analysis') {
+            steps {
+                echo "Running Sonar Analysis..."
+                sh 'mvn sonar:sonar --no-transfer-progress -Dsonar.host.url=http://sonar:9000 -Dsonar.login=squ_316ae650e787918fefd1732944b4cc9ee458b262'
+            }
+        }
+        
+        stage('Build image') {
+            steps {
+                echo 'Building Docker image with the app context mounted...'
+                sh 'docker build -t spring-app -f cicd/Dockerfile.app .'
+            }
+        }
+        
+        stage('Remove container') {
+            steps {
+                echo 'Verifying existence of the application container...'
+                script {
+                    def containerExists = sh(script: "docker ps -a --filter 'name=spring-app' --format '{{.Names}}'", returnStdout: true).trim()
+                    if (containerExists == 'spring-app') {
+                        echo 'Container exists. Stopping and removing it...'
+                        sh 'docker stop spring-app'
+                        sh 'docker rm spring-app'
+                    } else {
+                        echo 'Container does not exist. Proceeding to run a new container...'
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy App') {
+            steps {
+                echo 'Running the App in a new container...'
+                sh 'docker run -d --name spring-app -p 8081:8081 spring-app'
+            }
+        }
+    }
+}
